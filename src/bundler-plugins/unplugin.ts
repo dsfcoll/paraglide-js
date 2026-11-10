@@ -87,11 +87,6 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 	);
 }
 
-/**
- * Default isServer which differs per bundler.
- */
-let isServer: string | undefined;
-
 type PluginState = {
 	/** Identity of the fs the tracked wrapper was created around. */
 	baseFs: typeof nodeFs | undefined;
@@ -161,7 +156,6 @@ function getCompilerConfig(
 	return {
 		...serializableArgs,
 		outputStructure,
-		isServer,
 		compilerVersion: ENV_VARIABLES.PARJS_PACKAGE_VERSION,
 	};
 }
@@ -441,16 +435,10 @@ async function compileAndUpdateState(args: {
 	compilerOptions: CompilerOptions;
 	outputStructure: NonNullable<CompilerOptions["outputStructure"]>;
 	previousCompilation: CompilationResult | undefined;
-	/**
-	 * The `isServer` expression to bake into the compiled runtime.
-	 * Webpack omits it and relies on the compiler default.
-	 */
-	isServer: string | undefined;
 }): Promise<void> {
 	args.state.previousCompilation = await compile({
 		previousCompilation: args.previousCompilation,
 		outputStructure: args.outputStructure,
-		isServer: args.isServer,
 		...withoutCleanOutdir(args.compilerOptions),
 		cleanOutdir: false,
 		// after the options spread so a user-provided fs doesn't bypass
@@ -520,7 +508,6 @@ async function runCompilation(args: {
 			compilerOptions,
 			outputStructure,
 			previousCompilation: seededPrevious,
-			isServer,
 		});
 		await writePersistentCache(state, compilerOptions, outputStructure);
 		logger.success(`Compilation complete (${outputStructure})`);
@@ -565,6 +552,7 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 	// project directory.
 	let discoveryRoot: string | undefined;
 	let isDevelopment: string | undefined;
+	let isServer: string | undefined;
 	// Bound to the hook context in buildStart so that watchChange can
 	// register additional files.
 	let addWatchFile: ((path: string) => void) | undefined;
@@ -660,6 +648,7 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 			config: loaded?.config,
 			overrides: {
 				...userArgs,
+				isServer: userArgs.isServer ?? loaded?.config.isServer ?? isServer,
 				isDevelopment:
 					userArgs.isDevelopment ??
 					loaded?.config.isDevelopment ??
@@ -802,7 +791,6 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 				compilerOptions: args,
 				outputStructure,
 				previousCompilation: seededPrevious,
-				isServer,
 			});
 			await writePersistentCache(state, args, outputStructure);
 			logger.success(`Re-compilation complete (${outputStructure})`);
@@ -1024,9 +1012,6 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 						compilerOptions: args,
 						outputStructure,
 						previousCompilation: seededPrevious,
-						// webpack has no vite-style SSR expression; rely on the
-						// compiler default.
-						isServer: undefined,
 					});
 					await writePersistentCache(state, args, outputStructure);
 					logger.success(`Compilation complete (${outputStructure})`);
@@ -1109,7 +1094,6 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 						compilerOptions: args,
 						outputStructure,
 						previousCompilation: seededPrevious,
-						isServer: undefined,
 					});
 					await writePersistentCache(state, args, outputStructure);
 					logger.success(`Compilation complete (${outputStructure})`);

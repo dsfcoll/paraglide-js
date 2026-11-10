@@ -42,8 +42,7 @@ export function emitSupportingDeclarations(args: {
 		DISABLE_ASYNC_LOCAL_STORAGE: String(
 			args.compilerOptions.disableAsyncLocalStorage ?? false
 		),
-		// isServer accepts arbitrary bundler expressions, whose environment is
-		// unknown at compile time (e.g. import.meta.env.SSR). Keep those open,
+		// isServer accepts arbitrary bundler expressions. Keep unknown ones open,
 		// matching the old declaration emitter's unresolved-expression behavior.
 		IS_SERVER: isServerType(args.compilerOptions.isServer),
 		IS_DEVELOPMENT: isServerType(args.compilerOptions.isDevelopment ?? "true"),
@@ -63,6 +62,7 @@ function isServerType(expression: string | undefined): string {
 	if (trimmed === "true" || trimmed === "false") return trimmed;
 	if (
 		trimmed === undefined ||
+		trimmed === "import.meta.env?.SSR ?? typeof window === 'undefined'" ||
 		/^typeof\s+[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*(?:===|!==|==|!=)\s*(['"])(?:undefined|function|object|boolean|number|bigint|string|symbol)\1$/.test(
 			trimmed
 		)
