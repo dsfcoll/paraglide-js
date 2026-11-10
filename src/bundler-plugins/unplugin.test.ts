@@ -1587,3 +1587,138 @@ test("registers all config candidates inside the project directory", async () =>
 		expect(addedWatchFiles).toContain(path.join(projectDir, name));
 	}
 });
+
+// Issue #883: resolved compiler defaults must not replace Vite's SSR check.
+test.each([
+	{
+		name: "without config",
+		config: undefined,
+		explicit: undefined,
+		expected: "import.meta.env?.SSR ?? typeof window === 'undefined'",
+		type: "boolean",
+	},
+	{
+		name: "with empty config",
+		config: "export default {}",
+		explicit: undefined,
+		expected: "import.meta.env?.SSR ?? typeof window === 'undefined'",
+		type: "boolean",
+	},
+	{
+		name: "with config override",
+		config: 'export default { isServer: "true" }',
+		explicit: undefined,
+		expected: "true",
+		type: "true",
+	},
+	{
+		name: "with explicit override",
+		config: undefined,
+		explicit: "false",
+		expected: "false",
+		type: "false",
+	},
+	{
+		name: "with explicit override over config",
+		config: 'export default { isServer: "true" }',
+		explicit: "false",
+		expected: "false",
+		type: "false",
+	},
+])(
+	"Vite build resolves isServer $name (#883)",
+	async ({ config, explicit, expected, type }) => {
+		const { workspace, projectDir, outdir } = await createProjectFixture({
+			config: config === undefined ? false : { content: config },
+		});
+		await realFs.promises.writeFile(
+			path.join(workspace, "index.html"),
+			'<script type="module" src="/main.js"></script>'
+		);
+		await realFs.promises.writeFile(
+			path.join(workspace, "main.js"),
+			`import { isServer } from ${JSON.stringify(path.join(outdir, "runtime.js"))}; console.log(isServer);`
+		);
+		const { build } = await import("vite");
+		const { paraglideVitePlugin } = await import("./vite.js");
+		await build({
+			root: workspace,
+			configFile: false,
+			logLevel: "silent",
+			plugins: [
+				paraglideVitePlugin({
+					project: projectDir,
+					outdir,
+					isServer: explicit,
+				}),
+			],
+			build: { write: false },
+		});
+		expect(
+			await realFs.promises.readFile(path.join(outdir, "runtime.js"), "utf8")
+		).toContain(`export const isServer = ${expected};`);
+		expect(
+			await realFs.promises.readFile(path.join(outdir, "runtime.d.ts"), "utf8")
+		).toContain(`export const isServer: ${type};`);
+	}
+);
+
+test("non-Vite compilation keeps the compiler isServer default (#883)", async () => {
+	const { projectDir, outdir } = await createProjectFixture({ config: false });
+	const { unpluginFactory } = await import("./unplugin.js");
+	const plugin = unpluginFactory({ project: projectDir, outdir }) as any;
+	await plugin.buildStart.call(mockContext);
+	expect(
+		await realFs.promises.readFile(path.join(outdir, "runtime.js"), "utf8")
+	).toContain("export const isServer = typeof window === 'undefined';");
+});
+
+test("Vite dev emits its SSR expression and a boolean declaration (#883)", async () => {
+	const { workspace, projectDir, outdir } = await createProjectFixture({
+		config: false,
+	});
+	const { createServer } = await import("vite");
+	const { paraglideVitePlugin } = await import("./vite.js");
+	const server = await createServer({
+		root: workspace,
+		configFile: false,
+		logLevel: "silent",
+		plugins: [paraglideVitePlugin({ project: projectDir, outdir })],
+		server: { middlewareMode: true, watch: null },
+		optimizeDeps: { noDiscovery: true, include: [] },
+	});
+	try {
+		await server.transformRequest("/test-output/runtime.js");
+		expect(
+			(
+				await realFs.promises.readFile(path.join(outdir, "runtime.js"), "utf8")
+			).match(/export const isServer[^\n]*/)?.[0]
+		).toBe(
+			"export const isServer = import.meta.env?.SSR ?? typeof window === 'undefined';"
+		);
+		expect(
+			(
+				await realFs.promises.readFile(
+					path.join(outdir, "runtime.d.ts"),
+					"utf8"
+				)
+			).match(/export const isServer[^\n]*/)?.[0]
+		).toBe("export const isServer: boolean;");
+	} finally {
+		await server.close();
+	}
+});
+
+test("Vite's isServer default does not leak to another bundler instance (#883)", async () => {
+	const { projectDir, outdir } = await createProjectFixture({ config: false });
+	const { unpluginFactory } = await import("./unplugin.js");
+	const vite = unpluginFactory({ project: projectDir, outdir }) as any;
+	vite.vite.config.handler();
+	const other = unpluginFactory({ project: projectDir, outdir }) as any;
+	await other.buildStart.call(mockContext);
+	expect(
+		(
+			await realFs.promises.readFile(path.join(outdir, "runtime.js"), "utf8")
+		).match(/export const isServer[^\n]*/)?.[0]
+	).toBe("export const isServer = typeof window === 'undefined';");
+});
