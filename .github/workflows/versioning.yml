@@ -14,7 +14,13 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   versioning:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    permissions:
+      contents: write
+      pull-requests: write
     name: versioning
     environment: production
     runs-on: ubuntu-latest
