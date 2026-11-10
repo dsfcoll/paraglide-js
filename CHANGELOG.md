@@ -1,5 +1,11 @@
 # @inlang/paraglide-js
 
+## 3.2.2
+
+### Patch Changes
+
+- 4445e45: Preserve Vite's SSR detection expression when resolving compiler defaults, while respecting explicit plugin and config overrides. Keep the generated `isServer` declaration typed as `boolean` for the Vite expression.
+
 ## 3.2.1
 
 ### Patch Changes
