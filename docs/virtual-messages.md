@@ -115,22 +115,16 @@ not make catalog compilation lazy.
 
 ## Development and production
 
-### Large catalogs and browser tests
+In development, Vite serves each virtual message module separately. Pages
+that use many messages and browser test suites can be slower because they
+make more HTTP requests.
 
-Virtual output serves each message implementation as a separate module. Vite's
-dev server does not bundle these modules, so a page that uses hundreds of
-messages can make hundreds of HTTP requests. Browser-mode test suites can
-repeat that work across isolated test files. With large catalogs, the request
-overhead can make virtual output slower than a physical layout.
+For large catalogs, try `locale-modules` during development and tests. This
+loads fewer modules, but each locale module contains all its messages. A page
+or test that uses few messages may load faster with virtual modules.
 
-`locale-modules` loads the full catalog in one module per locale, reducing the
-number of requests. It can improve full-suite and message-heavy page load times,
-but an isolated page or test using few messages can load faster with virtual
-output. Compare both layouts with your own catalog and test suite.
-
-To use physical locale modules for development and tests while retaining
-virtual modules for production builds, choose the layout explicitly in
-`vite.config.ts`:
+Set `outputStructure` in `vite.config.ts` to use locale modules for development
+and Vitest, and virtual modules for production builds:
 
 ```ts
 import { defineConfig } from "vite";
@@ -149,23 +143,12 @@ export default defineConfig(({ command }) => ({
 }));
 ```
 
-Vite uses `command: "serve"` for its dev server and Vitest uses the same dev
-server pipeline. `vite build`, including `vite build --mode development`, uses
-`command: "build"`. The explicit declaration option keeps generated TypeScript
-types available with either layout.
+To use locale modules only in Vitest, set `outputStructure` to
+`process.env.VITEST ? "locale-modules" : "virtual-modules"` instead. If you have
+a separate Vitest config, set the option there.
 
-To change only tests, use
-`process.env.VITEST ? "locale-modules" : "virtual-modules"` for `outputStructure`
-instead. Vitest sets `process.env.VITEST` when loading the Vite configuration.
-If you use a separate Vitest config, apply the plugin configuration there too.
-
-These are explicit project choices. Vite's default remains `virtual-modules`
-for development and production. Keep application imports pointed at the public
-`messages.js` entry point with either layout. If a dev server and test runner
-run at the same time with different layouts, give them separate output
-directories so they do not overwrite each other's generated files.
-
-### Watching and production output
+Use separate `outdir` values if development and tests run at the same time
+with different layouts.
 
 Keep the Paraglide plugin enabled for development and production builds. Edits
 use the normal compiler queue and tracked filesystem watcher. A successful
