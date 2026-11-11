@@ -10,7 +10,7 @@ import {
 } from "vite";
 import { paraglideVitePlugin } from "./vite.js";
 
-test("explicit virtual messages preserve aliases, edits, additions/removals, cold restarts and tree shaking", async () => {
+test("Vite defaults to virtual messages and preserves aliases, edits, additions/removals, cold restarts and tree shaking", async () => {
 	const root = await fs.realpath(
 		await fs.mkdtemp(path.join(tmpdir(), "paraglide-virtual-integration-"))
 	);
@@ -59,7 +59,6 @@ test("explicit virtual messages preserve aliases, edits, additions/removals, col
 		const options = {
 			project,
 			outdir,
-			outputStructure: "virtual-modules" as const,
 			strategy: ["baseLocale"] as const,
 			emitGitIgnore: false,
 			emitPrettierIgnore: false,
@@ -237,7 +236,6 @@ test("virtual messages update every Vite environment after an edit", async () =>
 				paraglideVitePlugin({
 					project: path.join(root, "project.inlang"),
 					outdir: path.join(root, "paraglide"),
-					outputStructure: "virtual-modules",
 					strategy: ["baseLocale"],
 					emitGitIgnore: false,
 					emitPrettierIgnore: false,
@@ -300,10 +298,7 @@ test("replacing the virtual output reloads each Vite environment once", async ()
 			path.join(root, "plugin.js"),
 			`export default {key:"plugin.fixture.replace",toBeImportedFiles:async()=>[{path:"./messages.json",locale:"en"}],importFiles:()=>({bundles:[{id:"greeting"}],messages:[{bundleId:"greeting",locale:"en"}],variants:[{messageBundleId:"greeting",messageLocale:"en",pattern:[{type:"text",value:"HELLO"}]}]})};`
 		);
-		await fs.writeFile(
-			config,
-			'export default { outdir: "./one", outputStructure: "virtual-modules" };'
-		);
+		await fs.writeFile(config, 'export default { outdir: "./one" };');
 		server = await createServer({
 			root,
 			configFile: false,
@@ -352,10 +347,7 @@ test("replacing the virtual output reloads each Vite environment once", async ()
 			);
 		const once = { client: 1, ssr: 1, custom: 1 };
 		// another output directory replaces the transport
-		await fs.writeFile(
-			config,
-			'export default { outdir: "./two", outputStructure: "virtual-modules" };'
-		);
+		await fs.writeFile(config, 'export default { outdir: "./two" };');
 		await server.pluginContainer.watchChange(config, { event: "update" });
 		expect(reloadCounts()).toEqual(once);
 		// physical output removes it
@@ -559,7 +551,6 @@ test("virtual messages keep keys that collide with module ids, bindings and the 
 	const options = {
 		project: path.join(root, "project.inlang"),
 		outdir: path.join(root, "paraglide"),
-		outputStructure: "virtual-modules" as const,
 		strategy: ["baseLocale" as const],
 		emitGitIgnore: false,
 		emitPrettierIgnore: false,
