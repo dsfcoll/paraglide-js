@@ -523,11 +523,21 @@ async function runCompilation(args: {
 
 // The return type preserves literal option types (`enforce: "pre"`, ...)
 // while `project` stays required on the input side.
-type UnpluginIntegrationOptions = Pick<CompilerOptions, "outputStructure"> & {
+type UnpluginIntegrationOptions = {
+	outputStructure?:
+		| CompilerOptions["outputStructure"]
+		| ((
+				command: "serve" | "build" | undefined
+		  ) => NonNullable<CompilerOptions["outputStructure"]>);
 	getOutputTransform?: (
 		options: CompilerOptions
 	) => OutputTransform | undefined;
-	emitTsDeclarations?: boolean | ((options: CompilerOptions) => boolean);
+	emitTsDeclarations?:
+		| boolean
+		| ((
+				options: CompilerOptions,
+				usesDefaultOutputStructure: boolean
+		  ) => boolean);
 	validateOptions?: (options: CompilerOptions) => void;
 	devErrorResponse?: boolean;
 };
@@ -552,6 +562,7 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 	// project directory.
 	let discoveryRoot: string | undefined;
 	let isDevelopment: string | undefined;
+	let viteCommand: "serve" | "build" | undefined;
 	let isServer: string | undefined;
 	// Bound to the hook context in buildStart so that watchChange can
 	// register additional files.
@@ -659,11 +670,15 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 		});
 		// Apply integration defaults after each config load, keeping watched
 		// config values separate from explicit plugin overrides.
-		if (
+		const outputStructureDefault = defaults?.outputStructure;
+		const usesDefaultOutputStructure =
 			options.outputStructure === undefined &&
-			defaults?.outputStructure !== undefined
-		) {
-			options.outputStructure = defaults.outputStructure;
+			outputStructureDefault !== undefined;
+		if (usesDefaultOutputStructure) {
+			options.outputStructure =
+				typeof outputStructureDefault === "function"
+					? outputStructureDefault(viteCommand)
+					: outputStructureDefault;
 		}
 		const outputTransform = defaults?.getOutputTransform?.(options);
 		if (outputTransform) {
@@ -676,7 +691,7 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 		)
 			options.emitTsDeclarations =
 				typeof defaults.emitTsDeclarations === "function"
-					? defaults.emitTsDeclarations(options)
+					? defaults.emitTsDeclarations(options, usesDefaultOutputStructure)
 					: defaults.emitTsDeclarations;
 		defaults?.validateOptions?.(options);
 		if (options.outputStructure === "virtual-modules" && !outputTransform) {
@@ -919,8 +934,13 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 				},
 			},
 			configResolved: {
-				handler: (config: { root?: string; isProduction?: boolean }) => {
+				handler: (config: {
+					root?: string;
+					isProduction?: boolean;
+					command?: "serve" | "build";
+				}) => {
 					discoveryRoot = config.root;
+					viteCommand = config.command;
 					isDevelopment =
 						config.isProduction === undefined
 							? undefined
