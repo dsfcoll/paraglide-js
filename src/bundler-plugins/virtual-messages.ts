@@ -290,11 +290,11 @@ export function createVirtualMessagesPlugins(
 	const compiler = createVitePlugin<ParaglidePluginOptions>((options, meta) =>
 		unpluginFactory(options, meta, {
 			devErrorResponse,
-			outputStructure: (command) =>
+			outputStructure: ({ command }) =>
 				command === "serve" ? "locale-modules" : "virtual-modules",
 			// The implicit Vite layout has always supplied declarations. Preserve
 			// those types when development uses physical locale modules.
-			emitTsDeclarations: (options, usesDefaultOutputStructure) =>
+			emitTsDeclarations: (options, { usesDefaultOutputStructure }) =>
 				usesDefaultOutputStructure ||
 				options.outputStructure === "virtual-modules",
 			validateOptions(options) {

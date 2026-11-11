@@ -521,13 +521,30 @@ async function runCompilation(args: {
 	}
 }
 
+/**
+ * Plugin state available to integrations when they resolve their defaults.
+ * Add fields here instead of adding positional callback parameters.
+ */
+type IntegrationDefaultsContext = {
+	/** Vite's command, or `undefined` outside Vite. */
+	command: "serve" | "build" | undefined;
+};
+
+type EmitTsDeclarationsDefaultsContext = IntegrationDefaultsContext & {
+	/**
+	 * Whether the integration's `outputStructure` default was applied because
+	 * neither the plugin options nor the project config set a layout.
+	 */
+	usesDefaultOutputStructure: boolean;
+};
+
 // The return type preserves literal option types (`enforce: "pre"`, ...)
 // while `project` stays required on the input side.
 type UnpluginIntegrationOptions = {
 	outputStructure?:
 		| CompilerOptions["outputStructure"]
 		| ((
-				command: "serve" | "build" | undefined
+				context: IntegrationDefaultsContext
 		  ) => NonNullable<CompilerOptions["outputStructure"]>);
 	getOutputTransform?: (
 		options: CompilerOptions
@@ -536,7 +553,7 @@ type UnpluginIntegrationOptions = {
 		| boolean
 		| ((
 				options: CompilerOptions,
-				usesDefaultOutputStructure: boolean
+				context: EmitTsDeclarationsDefaultsContext
 		  ) => boolean);
 	validateOptions?: (options: CompilerOptions) => void;
 	devErrorResponse?: boolean;
@@ -677,7 +694,7 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 		if (usesDefaultOutputStructure) {
 			options.outputStructure =
 				typeof outputStructureDefault === "function"
-					? outputStructureDefault(viteCommand)
+					? outputStructureDefault({ command: viteCommand })
 					: outputStructureDefault;
 		}
 		const outputTransform = defaults?.getOutputTransform?.(options);
@@ -691,7 +708,10 @@ export const unpluginFactory: UnpluginFactoryWithOptions = (
 		)
 			options.emitTsDeclarations =
 				typeof defaults.emitTsDeclarations === "function"
-					? defaults.emitTsDeclarations(options, usesDefaultOutputStructure)
+					? defaults.emitTsDeclarations(options, {
+							command: viteCommand,
+							usesDefaultOutputStructure,
+						})
 					: defaults.emitTsDeclarations;
 		defaults?.validateOptions?.(options);
 		if (options.outputStructure === "virtual-modules" && !outputTransform) {
